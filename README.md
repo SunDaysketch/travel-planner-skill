@@ -129,4 +129,4 @@ MIT License — 自由使用、修改、分享，保留原作者署名即可。
 
 ## 👤 作者
 
-Made with ❤️ — 如有問題請開 Issue 或 PR。
+Made with Max — 如有問題請開 Issue 或 PR。
