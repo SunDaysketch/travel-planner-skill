@@ -1,36 +1,25 @@
 ---
 name: travel-planner
 description: >
-  生成互動式自由行旅遊網頁（PWA 可安裝應用）。當使用者說「幫我做旅遊網頁」、「整理一下我的行程」、
+  生成互動式自由行旅遊網頁（單一 HTML 檔）。當使用者說「幫我做旅遊網頁」、「整理一下我的行程」、
   「排版我的旅遊計畫」、「做一個旅遊指南」、「幫我把行程做成網頁」、「出發前整理」，
   或提到任何目的地 + 行程規劃相關詞語時，立即啟用此 Skill。
-  v1.2.0 新增 PWA 支援：可「加到主畫面」、離線使用、Google Maps 一鍵導航、行程進度追蹤。
   支援全球任何城市，中英雙語切換，內含進階交通票種比價與 Pass 建議，以及即時天氣預報與穿衣建議。
   只要使用者提到自由行、旅遊規劃、行程安排，都應優先詢問是否啟用此 Skill。
 ---
 
-# 🌏 自由行旅遊網頁生成器 v1.2.0
+# 🌏 自由行旅遊網頁生成器
 
-產出物為**可安裝的 PWA 旅遊 App**（單一 HTML 檔 + manifest + Service Worker + 圖示），
-可在瀏覽器直接開啟，使用者可選「加到主畫面」變成像原生 App 一樣的體驗。
-
-## v1.2.0 升級重點
-
-- 🏠 **PWA 支援**：使用者可「加到主畫面」，桌面出現 App 圖示，全螢幕無瀏覽器 UI
-- 📴 **離線模式**：Service Worker 快取所有資源，出國無網路也能看行程
-- 🗺️ **Google Maps 一鍵導航**：每個景點旁邊加按鈕，點擊跳轉導航
-- ✅ **行程進度追蹤**：localStorage 記住去過哪些景點，打勾標記
-- 💰 **預算追蹤（可選）**：每日花費記錄
-- ☀️ **天氣快取**：天氣資料預先寫入 HTML，離線也能看預報
+產出物為**單一 HTML 檔**（React + Babel CDN，零依賴），可在瀏覽器直接開啟，也可分享給同行者。
 
 ---
 
 ## Step 1：收集資訊（問卷）
 
-啟用後，先向使用者收集以下資訊：
+啟用後，先向使用者收集以下資訊（可一次問完）：
 
 ```
-請提供以下資訊，我來幫你做旅遊 PWA App：
+請提供以下資訊，我來幫你做旅遊網頁：
 
 1. 🗺️ 目的地城市（可多個，例：大阪 + 京都）
 2. 📅 出發 / 回程日期
@@ -38,23 +27,15 @@ description: >
 4. 📋 行程內容（每天想去哪、已預訂的景點/餐廳清單）
 5. 🎫 機場交通方式是否已確定？（若未確定，我會根據目的地推薦）
 6. 🍜 有沒有美食或購物清單要收錄？（可貼 Google Maps 連結或店名）
-7. 💰 要不要加預算追蹤功能？（可輸入每日預算上限）
 ```
 
 若使用者只提供部分資訊，先用現有資訊產出網頁，缺少的部分用佔位符標示。
 
 ---
 
-## Step 2：天氣預報與穿衣建議模組（含離線快取）
+## Step 2：天氣預報與穿衣建議模組
 
 收到目的地與日期後，在網頁中嵌入 **Open-Meteo 即時天氣 API**（免費、無需 Key、CORS 友好）。
-
-**v1.2.0 新做法**：
-1. 產生 HTML 時先 **預先 fetch 天氣資料**，把結果寫入 HTML 的 `<script>` 區塊成為 `INITIAL_WEATHER_DATA` 常數
-2. 網頁載入時先用這份快取資料即時渲染
-3. 背景再呼叫 API 更新（若有網路）
-
-這樣即使使用者在飛機上、或當地網路不穩，至少能看到出發前最新的天氣。
 
 ### ⚠️ API 選擇規則（依行程日期判斷）
 
@@ -121,43 +102,9 @@ function getClothingTip(maxC, minC, precipMm, lang) {
 }
 ```
 
-### 天氣預快取策略（v1.2.0 新增）
-
-在產生 HTML 前，Claude 需先呼叫一次 Open-Meteo API（使用 web_fetch 工具），
-把結果嵌入 HTML 作為 `INITIAL_WEATHER_DATA`：
-
-```html
-<script>
-  // 由 Claude 在生成時填入（離線可看）
-  const INITIAL_WEATHER_DATA = {
-    "2026-04-14": { icon:"☀️", max:22, min:14, precip:0, wmoZh:"晴天", wmoEn:"Sunny", ... },
-    "2026-04-15": { ... },
-    // ...
-  };
-</script>
-```
-
-React State 初始值就用這份資料：
-
-```jsx
-const [weather, setWeather] = React.useState(INITIAL_WEATHER_DATA);
-
-React.useEffect(() => {
-  // 嘗試更新（有網路才會成功，失敗保持初始快取）
-  async function refreshWeather() {
-    try {
-      const res = await fetch(WEATHER_URL);
-      const d = await res.json();
-      // ... 處理並 setWeather(map)
-    } catch(e) {
-      console.warn("離線模式，使用快取天氣");
-    }
-  }
-  refreshWeather();
-}, []);
-```
-
 ### 天氣卡片元件（WeatherCard）
+
+每個 DayPanel 底部加入此元件，與 Tips 卡片並列：
 
 ```jsx
 function WeatherCard({ weather, lang }) {
@@ -189,6 +136,75 @@ function WeatherCard({ weather, lang }) {
 }
 ```
 
+### React State 整合
+
+在主 App 元件中新增 `weather` state，頁面載入時 fetch：
+
+```jsx
+const [weather, setWeather] = React.useState({});  // key: "YYYY-MM-DD"
+
+React.useEffect(() => {
+  async function fetchWeather() {
+    try {
+      const res = await fetch(WEATHER_URL);  // WEATHER_URL 由 Claude 填入
+      const d = await res.json();
+      const map = {};
+      d.daily.time.forEach((date, i) => {
+        const wmo = wmoToEmoji(d.daily.weathercode[i]);
+        const maxC = Math.round(d.daily.temperature_2m_max[i]);
+        const minC = Math.round(d.daily.temperature_2m_min[i]);
+        const precip = +(d.daily.precipitation_sum[i] || 0).toFixed(1);
+        map[date] = {
+          icon: wmo.icon,
+          wmoZh: wmo.zh, wmoEn: wmo.en,
+          max: maxC, min: minC, precip,
+          clothing: {
+            zh: getClothingTip(maxC, minC, precip, "zh"),
+            en: getClothingTip(maxC, minC, precip, "en"),
+          }
+        };
+      });
+      setWeather(map);
+    } catch(e) { console.warn("Weather fetch failed", e); }
+  }
+  fetchWeather();
+}, []);
+```
+
+在 DayPanel 呼叫時傳入對應日期的天氣：
+
+```jsx
+<DayPanel data={day} lang={lang} weatherData={weather[day.date]} />
+```
+
+DayPanel 內部在 Tips 卡片之前加入：
+
+```jsx
+<WeatherCard weather={weatherData} lang={lang} />
+```
+
+### 中英對照補充
+
+在 T 物件新增：
+
+```javascript
+T.zh.weather = "今日天氣";
+T.en.weather = "Today's Weather";
+T.zh.outfit   = "穿搭建議";
+T.en.outfit   = "Outfit";
+```
+
+### 預報超出範圍處理
+
+Open-Meteo 免費版最多提供 **16 天預報**。超出範圍時 WeatherCard 顯示歷史均值備注：
+
+```jsx
+// 若 date 超過今日 + 16 天，顯示靜態氣候均值
+<div style={{ fontSize:11, color:"#94a3b8", marginTop:4 }}>
+  ＊ {lang==="zh" ? "超出預報範圍，顯示歷史氣候均值" : "Beyond forecast range—showing climate average"}
+</div>
+```
+
 ---
 
 ## Step 3：交通票種分析
@@ -202,149 +218,7 @@ function WeatherCard({ weather, lang }) {
 
 ---
 
-## Step 4：產生 PWA 資源（v1.2.0 新增）
-
-除了主 HTML 檔外，額外產生以下檔案。詳細規格見 `references/pwa-guide.md`。
-
-### 必備檔案清單
-
-| 檔案 | 用途 |
-|------|------|
-| `index.html` | 主 App（內含 manifest link 與 SW 註冊）|
-| `manifest.json` | PWA 宣告檔（App 名稱、圖示、主題色）|
-| `sw.js` | Service Worker（離線快取邏輯）|
-| `icon-192.png` | App 圖示 192x192（必須）|
-| `icon-512.png` | App 圖示 512x512（必須）|
-| `icon-maskable.png` | Android 自適應圖示（建議）|
-
-### HTML `<head>` 必要標籤
-
-```html
-<!-- PWA manifest -->
-<link rel="manifest" href="manifest.json">
-
-<!-- iOS Safari 特別支援 -->
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Tokyo Guide">
-<link rel="apple-touch-icon" href="icon-192.png">
-
-<!-- 主題色（影響 Android 狀態列）-->
-<meta name="theme-color" content="#1e293b">
-
-<!-- Viewport 要加 viewport-fit=cover 才能用到瀏海區 -->
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-```
-
-### Service Worker 註冊
-
-HTML 底部加入：
-
-```html
-<script>
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('sw.js')
-        .then(reg => console.log('SW registered:', reg.scope))
-        .catch(err => console.log('SW registration failed:', err));
-    });
-  }
-</script>
-```
-
-### 安裝引導 UI（可選但推薦）
-
-顯示一個 **「📱 安裝到桌面」** 的浮動按鈕，點擊觸發安裝提示：
-
-```jsx
-function InstallButton({ lang }) {
-  const [deferredPrompt, setDeferredPrompt] = React.useState(null);
-  const [visible, setVisible] = React.useState(false);
-
-  React.useEffect(() => {
-    const handler = (e) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-      setVisible(true);
-    };
-    window.addEventListener('beforeinstallprompt', handler);
-    return () => window.removeEventListener('beforeinstallprompt', handler);
-  }, []);
-
-  const install = async () => {
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === 'accepted') setVisible(false);
-    setDeferredPrompt(null);
-  };
-
-  if (!visible) return null;
-  return (
-    <button onClick={install} style={{
-      position:"fixed", bottom:20, right:20, zIndex:1000,
-      background:"#1e293b", color:"white", border:"none", borderRadius:24,
-      padding:"12px 20px", fontSize:14, fontWeight:600, cursor:"pointer",
-      boxShadow:"0 4px 12px rgba(0,0,0,0.2)"
-    }}>
-      📱 {lang==="zh" ? "安裝到桌面" : "Install App"}
-    </button>
-  );
-}
-```
-
-### Google Maps 一鍵導航按鈕
-
-每個景點/餐廳卡片加入：
-
-```jsx
-function MapNavButton({ placeName, lang }) {
-  const query = encodeURIComponent(placeName);
-  const url = `https://www.google.com/maps/search/?api=1&query=${query}`;
-  return (
-    <a href={url} target="_blank" rel="noopener" style={{
-      display:"inline-flex", alignItems:"center", gap:4,
-      background:"#1a73e8", color:"white", textDecoration:"none",
-      padding:"6px 12px", borderRadius:6, fontSize:12, fontWeight:600
-    }}>
-      🗺️ {lang==="zh" ? "導航" : "Navigate"}
-    </a>
-  );
-}
-```
-
-### 行程進度追蹤（localStorage）
-
-每個景點卡片左側加入 checkbox，狀態存 localStorage：
-
-```jsx
-function PlaceCard({ place, lang }) {
-  const storageKey = `visited:${place.id}`;
-  const [visited, setVisited] = React.useState(
-    () => localStorage.getItem(storageKey) === 'true'
-  );
-
-  const toggle = () => {
-    const next = !visited;
-    setVisited(next);
-    localStorage.setItem(storageKey, String(next));
-  };
-
-  return (
-    <div style={{ opacity: visited ? 0.5 : 1, ...etc }}>
-      <input type="checkbox" checked={visited} onChange={toggle} />
-      <span style={{ textDecoration: visited ? "line-through" : "none" }}>
-        {place.name}
-      </span>
-      <MapNavButton placeName={place.name} lang={lang} />
-    </div>
-  );
-}
-```
-
----
-
-## Step 5：產生主 HTML 網頁
+## Step 4：產生 HTML 網頁
 
 讀取 `references/template-guide.md` 了解網頁骨架規格，然後生成完整 HTML。
 
@@ -354,7 +228,6 @@ function PlaceCard({ place, lang }) {
 - 旅行標題（城市名 + 旅遊天數）
 - 日期 & 住宿地點
 - 適用地鐵/交通線路標籤
-- **🆕 進度條**：顯示「已完成 N/M 個景點」
 
 **Tab 導航**（橫向可滑動）
 - Day 1 ~ Day N（每天一個 Tab）
@@ -364,23 +237,25 @@ function PlaceCard({ place, lang }) {
 
 **每日行程 DayPanel**
 - 行程摘要（Summary badge）
-- 路線卡片（Route Card）
-- 景點/活動列表（**🆕 每個帶勾選 + 導航按鈕**）
-- 天氣卡片（WeatherCard）
+- 路線卡片（Route Card）：
+  - 每段路線：起站 → 終站，交通方式，時間，費用
+  - 彩色線路點連線視覺（使用對應交通線路顏色）
+  - Google Maps Transit 導航按鈕
+- 景點/活動列表（帶 emoji 類型標示）
 - 當日小提示（Tips）
 
 **交通攻略 Tab**
-- 票種比價表
+- 票種比價表（散票 / IC卡 / Pass 費用對比）
 - 推薦票種及省錢金額
-- 哪裡購買
+- 哪裡購買（官網/Klook/便利商店）
 - 注意事項
 
 **美食/購物清單**
 - 依區域分組
 - 每個地點帶 Google Maps 連結按鈕
-- **🆕 勾選已去過**
+- 標示行程對應日期
 
-### 設計規格
+### 設計規格（繼承自東京版）
 
 ```
 色系：深色 header (#1e293b ~ #334155)，白色卡片，柔和背景 (#f0f2f5)
@@ -396,60 +271,16 @@ Google Maps 按鈕：藍色 #1a73e8，小型 icon-btn 樣式
 
 - 頁首右上角放語言切換按鈕（中文 / EN）
 - 切換後：頁籤名稱、景點說明、Tips 等文字同步替換
-- 景點/餐廳名稱維持原文，附中文說明
+- 景點/餐廳名稱維持原文（日文/韓文等保留），附中文說明
 - 實作方式：用 `lang` state，文字內容存成 `{zh: "...", en: "..."}` 物件
 
 ---
 
-## Step 6：輸出與部署建議
+## Step 5：輸出
 
-產出 6 個檔案（放在同一目錄）：
-
-1. `index.html`
-2. `manifest.json`
-3. `sw.js`
-4. `icon-192.png`
-5. `icon-512.png`
-6. `icon-maskable.png`（可選）
-
-### 部署選項
-
-**選項 A：本機使用**
-- 直接用 Live Server 或 `python -m http.server` 啟動（PWA 需 HTTPS 或 localhost）
-- 手機連同 WiFi 就能用 IP 訪問
-
-**選項 B：GitHub Pages（推薦）**
-```bash
-git init
-git add .
-git commit -m "v1.2.0 PWA release"
-git push origin main
-# 到 GitHub repo 的 Settings > Pages 啟用
-```
-會得到類似 `https://sundaysketch.github.io/tokyo-trip/` 的網址。
-
-**選項 C：Cloudflare Pages / Netlify**
-- 拖拉資料夾即可部署，自動 HTTPS
-
-### 使用者安裝流程
-
-告訴使用者：
-```
-📱 如何安裝到手機桌面：
-
-iPhone (Safari):
-1. 開啟網址
-2. 點下方分享按鈕 ↑
-3. 選「加入主畫面」
-
-Android (Chrome):
-1. 開啟網址
-2. 右上角選單 ⋮
-3. 選「安裝應用程式」
-
-安裝後桌面會出現 App 圖示，點開就是全螢幕體驗，
-網路斷線也能看行程！
-```
+- 輸出完整 HTML 原始碼（可直接存成 .html 開啟）
+- 同時說明：「直接另存為 index.html，用瀏覽器開啟即可」
+- 如需修改行程、新增景點，可直接告訴我
 
 ---
 
@@ -474,12 +305,3 @@ Android (Chrome):
 
 - `references/transport-db.md`：全球主要城市交通票種資料庫
 - `references/template-guide.md`：HTML 骨架詳細規格 & 程式碼片段
-- `references/pwa-guide.md`：🆕 PWA 完整實作指南（manifest, SW, 圖示產生）
-
----
-
-## 版本歷史
-
-- **v1.2.0**（2026-04-20）：加入 PWA 支援、離線模式、Google Maps 導航、行程進度追蹤
-- v1.1.0：加入天氣模組（Open-Meteo API、WMO 代碼、穿衣建議）
-- v1.0.0：初版，中英雙語、交通票種比價
